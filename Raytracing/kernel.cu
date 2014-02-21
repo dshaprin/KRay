@@ -13,8 +13,8 @@
  * 
  */
 #include <gl/glew.h>
-#include "../common/book.h"
-#include "../common/cpu_bitmap.h"
+#include "util.h"
+
 
 #include "cuda.h"
 #include "cuda_gl_interop.h"
@@ -24,55 +24,58 @@
 #include "camera.h"
 #include <iostream>
 #include "init.h"
-
+#include "geometry.h"
+#include "FrameBuffer.h"
 using std::cout;
 
 PFNGLBINDBUFFERARBPROC    glBindBuffer     = NULL;
 PFNGLDELETEBUFFERSARBPROC glDeleteBuffers  = NULL;
 PFNGLGENBUFFERSARBPROC    glGenBuffers     = NULL;
 PFNGLBUFFERDATAARBPROC    glBufferData     = NULL;
-Ray __device__ Camera::getScreenRay(double x, double y, int camera)
-{
-	Ray result; // A, B -     C = A + (B - A) * x
-	result.start = pos;
-	Vector target = upLeft + 
-		(upRight - upLeft) * (x / (double) frameWidth) +
-		(downLeft - upLeft) * (y / (double) frameHeight);
-	
-	// A - camera; B = target
-	result.dir = target - this->pos;
-	
-	result.dir.normalize();
-	
-	if (camera != CAMERA_CENTER) {
-		// offset left/right for stereoscopic rendering
-		result.start += rightDir * (camera == CAMERA_RIGHT ? +stereoSeparation : -stereoSeparation);
-	}
-	
-	/*if (!dof) return result;
-	
-	double cosTheta = dot(result.dir, frontDir);
-	double M = focalPlaneDist / cosTheta;
-	
-	Vector T = result.start + result.dir * M;
-	
-	//Random& R = getRandomGen();
-	double dx, dy;
-	R.unitDiscSample(dx, dy);
-	
-	dx *= discMultiplier;
-	dy *= discMultiplier;
-	
-	result.start = this->pos + dx * rightDir + dy * upDir;
-	if (camera != CAMERA_CENTER) {
-		result.start += rightDir * (camera == CAMERA_RIGHT ? +stereoSeparation : -stereoSeparation);
-	}
-	result.dir = (T - result.start);
-	result.dir.normalize();*/
-	return result;
-}
+
+
 __constant__ Camera cameraDev[1];
-__global__ void kernel( uchar4 *ptr, int width, int height ) 
+Color __device__ raytrace(const Ray& ray, SceneDeviceData sceneData)
+{
+	Node * n = nullptr;
+	IntersectionData intersectionData;
+	intersectionData.dist = INF;
+	int cur;
+	for(int i = 0; i < sceneData.nodesCount; ++i){
+		Node& cur = sceneData.nodes[i];
+		switch(cur.geometryType)
+		{
+			case geometryPlane:
+				
+				if(sceneData.planesDev[cur.geometry].intersect(ray, intersectionData))
+					n = &cur;
+				break;
+				
+			case geometryCube:
+				if(sceneData.cubesDev[cur.geometry].intersect(ray, intersectionData))
+					n = &cur;
+				break;
+			case geometrySphere:
+				if(sceneData.spheresDev[cur.geometry].intersect(ray, intersectionData))
+					n = &cur;
+				break;
+			
+			default:
+				return Color(1,0,1);
+		}
+		
+		
+	}
+	if(n != nullptr)
+		switch(n->shaderType)
+		{
+			case shaderLambert:
+				return sceneData.lambertShadersDev[n->shader].eval(ray, intersectionData, sceneData.pointLightsDev, sceneData.pointLightsCount);
+		}
+
+	return Color(0.0f, 0.0f, 1.0f);
+}
+__global__ void kernel( uchar4 *ptr, int width, int height, SceneDeviceData data) 
 {
     int y = threadIdx.y + blockIdx.y * blockDim.y;
 	if(y < height)
@@ -80,27 +83,11 @@ __global__ void kernel( uchar4 *ptr, int width, int height )
 		int x = threadIdx.x + blockIdx.x * blockDim.x;
 		int offset = x + y * blockDim.x * gridDim.x;
 		Ray ray = cameraDev->getScreenRay(x, y);
-		ptr[offset].x = ptr[offset].y = ptr[offset].z = 0;
-		if(fabsf(ray.dir.x) > fabsf(ray.dir.y) && fabsf(ray.dir.x) > fabsf(ray.dir.z))
-			if(ray.dir.x > 0)
-				ptr[offset].x = 255;
-			else
-				ptr[offset].y = 255;
-		else if(fabsf(ray.dir.y) > fabsf(ray.dir.z))
-			if(ray.dir.y > 0)
-				ptr[offset].z =  255;
-			else{
-				ptr[offset].x = 255;
-				ptr[offset].y = 255;
-			}
-		else if(ray.dir.z > 0){
-			ptr[offset].x = 255;
-			ptr[offset].z = 255;
-		}
-		else{
-			ptr[offset].y = 255;
-			ptr[offset].z = 255;
-		}
+		Color c = raytrace(ray, data);
+		unsigned  col = c.toRGB32();
+		ptr[offset].x = (( col & 0x00FF0000)>>16);
+		ptr[offset].y = (( col & 0x0000FF00)>>8);		
+		ptr[offset].z = ( col & 0x000000FF);
 		ptr[offset].w = 255;
 
 	}
@@ -108,6 +95,7 @@ __global__ void kernel( uchar4 *ptr, int width, int height )
 }
 void render(uchar4* devPtr, cudaGraphicsResource *resource, Camera& camera, int width, int height)
 {  
+	
 	HANDLE_ERROR( cudaGraphicsMapResources( 1, &resource, NULL ) );
     size_t  size;
     HANDLE_ERROR( 
@@ -118,14 +106,15 @@ void render(uchar4* devPtr, cudaGraphicsResource *resource, Camera& camera, int 
 	HANDLE_ERROR(cudaMemcpyToSymbol(cameraDev, &camera, sizeof(Camera)));
 	dim3    grids(width/16,height/16);
     dim3    threads(16,16);
-    kernel<<<grids,threads>>>( devPtr, width, height );
+	kernel<<<grids,threads>>>( devPtr, width, height, scene->getDeviceData());
 	glutPostRedisplay();
 	HANDLE_ERROR( cudaGraphicsUnmapResources( 1, &resource, NULL ) );
 }
+
 int main( int argc, char **argv )
 {
 	init(argc,argv);
-      
+	 
     // set up GLUT and kick off main loop
     glutKeyboardFunc( key_func );
     glutDisplayFunc( draw_func );

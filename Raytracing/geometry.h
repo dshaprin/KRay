@@ -25,7 +25,7 @@
 #include "transform.h"
 
 /// a structure, that holds info about an intersection. Filled in by Geometry::intersect() methods
-class Geometry;
+
 struct IntersectionData {
 	Vector p; //!< intersection point in the world-space
 	Vector normal; //!< the normal of the geometry at the intersection point
@@ -34,79 +34,44 @@ struct IntersectionData {
 	
 	double u, v; //!< 2D UV coordinates for texturing, etc.
 	
-	Geometry* g; //!< The geometry which was hit
 };
 
 /// An abstract class that represents any intersectable primitive in the scene.
-class Intersectable {
-public:
-	virtual ~Intersectable() {}
-	/**
-	 *  @brief Intersect a geometry with a ray.
-	 *  Returns true if an intersection is found, and it was closer than the current value of data.dist.
-	 * 
-	 *  @param ray - the ray to be traced
-	 *  @param data - in the event an intersection is found, this is filled with info about the intersection point.
-	 *  NOTE: the intersect() function MUST NOT touch any member of data, before it can prove the intersection
-	 *        point will be closer to the current value of data.dist!
-	 *  Note that this also means that if you want to find any intersection, you must initialize data.dist before
-	 *  calling intersect. E.g., if you don't care about distance to intersection, initialize data.dist with 1e99
-	 *
-	 * @retval true if an intersection is found. The `data' struct should be filled in.
-	 * @retval false if no intersection exists, or it is further than the current data.dist. In this case,
-	 *         the `data' struct should remain unchanged.
-	 */
-	virtual bool intersect(const Ray& ray, IntersectionData& info) = 0;
-	/// Checks if the given point is "inside" the geometry, for whatever definition of
-	/// inside is appropriate for the object. Returns a boolean value accordingly.
-	virtual bool isInside(const Vector& p) const = 0;
-};
 
 
-/// An abstract class, that describes a geometry in the scene.
-class Geometry: public Intersectable {
-public:
-	virtual ~Geometry() {}
 
-	virtual const char* getName() = 0; //!< a virtual function, which returns the name of a geometry
 
-	// from Intersectable:
-	virtual bool intersect(const Ray& ray, IntersectionData& data) = 0;
-	virtual bool isInside(const Vector& p) const = 0;
-	
-};
-
-class Plane: public Geometry {
+class Plane {
 	double y; //!< y-intercept. The plane is parallel to XZ, the y-intercept is at this value
 	double limit;
 public:
 	Plane(double _y = 0, double _limit = 1e99) { y = _y; limit = _limit; }
 
-	bool intersect(const Ray& ray, IntersectionData& data);
+	bool __device__ intersect(const Ray& ray, IntersectionData& data);
 	const char* getName() { return "Plane"; }
 	bool isInside(const Vector& p) const { return false; }
 };
 
-class Sphere: public Geometry {
+class Sphere {
 	Vector center;
 	double R;
 public:
 	Sphere(const Vector& center = Vector(0, 0, 0), double R = 1): center(center), R(R) {}
 	
 
-	bool intersect(const Ray& ray, IntersectionData& data);
+	bool __device__ intersect(const Ray& ray, IntersectionData& data);
 	const char* getName() { return "Sphere"; }
 	bool isInside(const Vector& p) const { return (center - p).lengthSqr() < R*R; }
 };
 
-class Cube: public Geometry {
+class Cube {
 	Vector center;
 	double side;
 	inline bool intersectCubeSide(const Ray& ray, const Vector& center, IntersectionData& data);
 public:
 	Cube(const Vector& center = Vector(0, 0, 0), double side = 1): center(center), side(side) {}
 
-	bool intersect(const Ray& ray, IntersectionData& data);	
+	bool __device__ intersect(const Ray& ray, IntersectionData& data);	
 	const char* getName() { return "Cube"; }
 	bool isInside(const Vector& p) const { 
 		return (fabs(p.x - center.x) <= side * 0.5 &&
@@ -116,34 +81,5 @@ public:
 };
 
 
-class Shader;
-class BumpTexture;
-/*
-/// A Node, which holds a geometry, linked to a shader.
-/// it is also allowed to use any Intersectable in place of the geometry - even another node.
-class Node: public SceneElement, public Intersectable {
-public:
-	Geometry* geom;
-	Shader* shader;
-	Transform transform;
-	Texture* bump;
-	
-	Node() { bump = NULL; }
-	Node(Geometry* g, Shader* s) { geom = g; shader = s; bump = NULL; }
-	
-	// from Intersectable:
-	bool intersect(const Ray& ray, IntersectionData& data);
-	bool isInside(const Vector& p) const { return geom->isInside(transform.undoPoint(p)); }
 
-	// from SceneElement:
-	ElementType getElementType() const { return ELEM_NODE; }
-	void fillProperties(ParsedBlock& pb)
-	{
-		pb.getGeometryProp("geometry", &geom);
-		pb.getShaderProp("shader", &shader);
-		pb.getTransformProp(transform);
-		pb.getTextureProp("bump", &bump);
-	}
-};
-*/
 #endif // __GEOMETRY_H__

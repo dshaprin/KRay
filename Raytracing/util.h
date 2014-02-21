@@ -25,12 +25,31 @@
 #include <math.h>
 #include <string>
 #include "constants.h"
+#include "cuda.h"
+#include "cuda_runtime_api.h"
+
+static void HandleError( cudaError_t err,
+                         const char *file,
+                         int line ) {
+    if (err != cudaSuccess) {
+        printf( "%s in %s at line %d\n", cudaGetErrorString( err ),
+                file, line );
+        exit( EXIT_FAILURE );
+    }
+}
+#define HANDLE_ERROR( err ) (HandleError( err, __FILE__, __LINE__ ))
+
+
+#define HANDLE_NULL( a ) {if (a == NULL) { \
+                            printf( "Host memory failed in %s at line %d\n", \
+                                    __FILE__, __LINE__ ); \
+                            exit( EXIT_FAILURE );}}
 
 inline double signOf(double x) { return x > 0 ? +1 : -1; }
 inline double sqr(double a) { return a * a; }
 inline double toRadians(double angle) { return angle / 180.0 * PI; }
 inline double toDegrees(double angle_rad) { return angle_rad / PI * 180.0; }
-inline int nearestInt(float x) { return (int) floor(x + 0.5f); }
+inline int __device__ __host__ nearestInt(float x) { return (int) floor(x + 0.5f); }
 
 std::string upCaseString(std::string s); //!< returns the string in UPPERCASE
 std::string extensionUpper(const char* fileName); //!< Given a filename, return its extension in UPPERCASE

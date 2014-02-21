@@ -1,5 +1,4 @@
-#include "../common/book.h"
-#include "../common/cpu_bitmap.h"
+
 
 #include "cuda.h"
 #include "cuda_gl_interop.h"
