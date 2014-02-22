@@ -23,7 +23,7 @@
 
 using std::cout;
 const char* const TITLE = "Raytracer";
-const int WIDTH = 800, HEIGHT = 592;
+extern int windowWidth, windowHeight;
 
 extern Scene* scene;
 extern GLuint  bufferObj;
@@ -33,9 +33,10 @@ extern Camera camera;
 
 extern std::vector<Plane*> planes;
 extern Plane* planesDev;
-void key_func( unsigned char key, int x, int y );
+void keyFunc( unsigned char key, int x, int y );
+void mouseFunc(int x, int y);
 void update();
-void draw_func( void );
+void drawFunc( void );
 void initCamera();
 void init(int argc, char* argv[]);
 #endif INIT_H

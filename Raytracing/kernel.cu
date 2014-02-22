@@ -35,12 +35,45 @@ PFNGLBUFFERDATAARBPROC    glBufferData     = NULL;
 
 
 __constant__ Camera cameraDev[1];
+bool __device__ checkVisibility(Vector firstPoint, Vector secondPoint, SceneDeviceData sceneData )
+{
+	Vector dir = secondPoint - firstPoint;
+	float distance = dir.length();
+	dir /= distance;
+	Ray ray(firstPoint,dir);
+	ray.start = firstPoint;
+	ray.dir = dir;
+	ray.flags |= RF_SHADOW;
+	
+	for(int i = 0; i < sceneData.nodesCount; ++i){
+		Node& cur = sceneData.nodes[i];
+		IntersectionData intersectionData;
+		intersectionData.dist = distance;
+		switch(cur.geometryType)
+		{
+			case geometrySphere:
+				if(sceneData.spheresDev[cur.geometry].intersect(ray, intersectionData))
+						return false;
+				break;
+			case geometryPlane:	
+				if(sceneData.planesDev[cur.geometry].intersect(ray, intersectionData))
+						return false;
+				break;		
+			case geometryCube:
+				if(sceneData.cubesDev[cur.geometry].intersect(ray, intersectionData))
+						return false;
+				break;
+			
+			
+		}
+	}
+	return true;
+}
 Color __device__ raytrace(const Ray& ray, SceneDeviceData sceneData)
 {
 	Node * n = nullptr;
 	IntersectionData intersectionData;
 	intersectionData.dist = INF;
-	int cur;
 	for(int i = 0; i < sceneData.nodesCount; ++i){
 		Node& cur = sceneData.nodes[i];
 		switch(cur.geometryType)
@@ -70,7 +103,7 @@ Color __device__ raytrace(const Ray& ray, SceneDeviceData sceneData)
 		switch(n->shaderType)
 		{
 			case shaderLambert:
-				return sceneData.lambertShadersDev[n->shader].eval(ray, intersectionData, sceneData.pointLightsDev, sceneData.pointLightsCount);
+				return sceneData.lambertShadersDev[n->shader].eval(ray, intersectionData, sceneData);
 		}
 
 	return Color(0.0f, 0.0f, 1.0f);
@@ -78,9 +111,9 @@ Color __device__ raytrace(const Ray& ray, SceneDeviceData sceneData)
 __global__ void kernel( uchar4 *ptr, int width, int height, SceneDeviceData data) 
 {
     int y = threadIdx.y + blockIdx.y * blockDim.y;
-	if(y < height)
-	{
-		int x = threadIdx.x + blockIdx.x * blockDim.x;
+	int x = threadIdx.x + blockIdx.x * blockDim.x;
+	if(y < height && x < width)
+	{	
 		int offset = x + y * blockDim.x * gridDim.x;
 		Ray ray = cameraDev->getScreenRay(x, y);
 		Color c = raytrace(ray, data);
@@ -104,7 +137,7 @@ void render(uchar4* devPtr, cudaGraphicsResource *resource, Camera& camera, int 
                                               resource) );
 	camera.beginFrame(width, height);
 	HANDLE_ERROR(cudaMemcpyToSymbol(cameraDev, &camera, sizeof(Camera)));
-	dim3    grids(width/16,height/16);
+	dim3    grids((width + 15)/16,(height + 15)/16);
     dim3    threads(16,16);
 	kernel<<<grids,threads>>>( devPtr, width, height, scene->getDeviceData());
 	glutPostRedisplay();
@@ -116,8 +149,8 @@ int main( int argc, char **argv )
 	init(argc,argv);
 	 
     // set up GLUT and kick off main loop
-    glutKeyboardFunc( key_func );
-    glutDisplayFunc( draw_func );
+    glutKeyboardFunc( keyFunc );
+    glutDisplayFunc( drawFunc );
     glutMainLoop();
 	
 }

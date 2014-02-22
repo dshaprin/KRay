@@ -27,14 +27,14 @@
 #include "cuda_runtime_api.h"
 struct Vector {
 	union {
-		struct { double x, y, z; };
-		double components[3];
+		struct { float x, y, z; };
+		float components[3];
 	};
 	
 	/////////////////////////
 	__host__ __device__ Vector () {}
-	__host__ __device__ Vector(double _x, double _y, double _z) { set(_x, _y, _z); }
-	void __host__ __device__ set(double _x, double _y, double _z)
+	__host__ __device__ Vector(float _x, float _y, float _z) { set(_x, _y, _z); }
+	void __host__ __device__ set(float _x, float _y, float _z)
 	{
 		x = _x;
 		y = _y;
@@ -44,21 +44,21 @@ struct Vector {
 	{
 		x = y = z = 0.0;
 	}
-	inline double __host__ __device__ length(void) const
+	inline float __host__ __device__ length(void) const
 	{
 		return sqrt(x * x + y * y + z * z);
 	}
-	inline double __host__ __device__ lengthSqr(void) const
+	inline float __host__ __device__ lengthSqr(void) const
 	{
 		return (x * x + y * y + z * z);
 	}
-	void __host__ __device__ scale(double multiplier)
+	void __host__ __device__ scale(float multiplier)
 	{
 		x *= multiplier;
 		y *= multiplier;
 		z *= multiplier;
 	}
-	void __host__ __device__ operator *= (double multiplier)
+	void __host__ __device__ operator *= (float multiplier)
 	{
 		scale(multiplier);
 	}
@@ -68,25 +68,25 @@ struct Vector {
 		y += rhs.y;
 		z += rhs.z;
 	}
-	void __host__ __device__ operator /= (double divider)
+	void __host__ __device__ operator /= (float divider)
 	{
-		scale(1.0 / divider);
+		scale(1.0f / divider);
 	}
 	void __host__ __device__ normalize(void)
 	{
-		double multiplier = 1.0 / length();
+		float multiplier = 1.0f / length();
 		scale(multiplier);
 	}
-	void __host__ __device__ setLength(double newLength)
+	void __host__ __device__ setLength(float newLength)
 	{
 		scale(newLength / length());
 	}
 	
-	inline __host__ __device__ double& operator[] (int index)
+	inline __host__ __device__ float& operator[] (int index)
 	{
 		return components[index];
 	}
-	inline __host__ __device__ const  double& operator[] (int index) const
+	inline __host__ __device__ const  float& operator[] (int index) const
 	{
 		return components[index];
 	}
@@ -94,7 +94,7 @@ struct Vector {
 	int __host__ __device__ maxDimension() const
 	{
 		int bi = 0;
-		double maxD = fabs(x);
+		float maxD = fabs(x);
 		if (fabs(y) > maxD) { maxD = fabs(y); bi = 1; }
 		if (fabs(z) > maxD) { maxD = fabs(z); bi = 2; }
 		return bi;
@@ -117,12 +117,12 @@ inline Vector __host__ __device__ operator - (const Vector& a)
 }
 
 /// dot product
-inline double __host__ __device__ operator * (const Vector& a, const Vector& b)
+inline float __host__ __device__ operator * (const Vector& a, const Vector& b)
 {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 /// dot product (functional form, to make it more explicit):
-inline double __host__ __device__ dot(const Vector& a, const Vector& b)
+inline float __host__ __device__ dot(const Vector& a, const Vector& b)
 {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
@@ -136,23 +136,23 @@ inline Vector __host__ __device__ operator ^ (const Vector& a, const Vector& b)
 	);
 }
 
-inline Vector __host__ __device__ operator * (const Vector& a, double multiplier)
+inline Vector __host__ __device__ operator * (const Vector& a, float multiplier)
 {
 	return Vector(a.x * multiplier, a.y * multiplier, a.z * multiplier);
 }
-inline Vector __host__ __device__ operator * (double multiplier, const Vector& a)
+inline Vector __host__ __device__ operator * (float multiplier, const Vector& a)
 {
 	return Vector(a.x * multiplier, a.y * multiplier, a.z * multiplier);
 }
-inline Vector __host__ __device__ operator / (const Vector& a, double divider)
+inline Vector __host__ __device__ operator / (const Vector& a, float divider)
 {
-	double multiplier = 1.0 / divider;
+	float multiplier = 1.0f / divider;
 	return Vector(a.x * multiplier, a.y * multiplier, a.z * multiplier);
 }
 
 inline Vector __host__ __device__ normalize(const Vector& vec)
 {
-	double multiplier = 1.0 / vec.length();
+	float multiplier = 1.0f / vec.length();
 	return vec * multiplier;
 }
 
