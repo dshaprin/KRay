@@ -71,6 +71,9 @@ bool __device__ checkVisibility(Vector firstPoint, Vector secondPoint, SceneDevi
 }
 Color __device__ raytrace(const Ray& ray, SceneDeviceData sceneData)
 {
+	if(ray.depth > 0)
+		return Color(0,0,0);
+	
 	Node * n = nullptr;
 	IntersectionData intersectionData;
 	intersectionData.dist = INF;
@@ -104,13 +107,15 @@ Color __device__ raytrace(const Ray& ray, SceneDeviceData sceneData)
 		{
 			case shaderLambert:
 				return sceneData.lambertShadersDev[n->shader].eval(ray, intersectionData, sceneData);
+			case shaderPhong:
+				return sceneData.phongShadersDev[n->shader].eval(ray, intersectionData, sceneData);
 		}
-
-	return Color(0.0f, 0.0f, 1.0f);
+	return Color(0,0,0);
+	return Color(fabsf(ray.dir.x), fabsf(ray.dir.y),fabsf( ray.dir.z));
 }
 __global__ void kernel( uchar4 *ptr, int width, int height, SceneDeviceData data) 
 {
-    int y = threadIdx.y + blockIdx.y * blockDim.y;
+	int y = threadIdx.y + blockIdx.y * blockDim.y;
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	if(y < height && x < width)
 	{	
